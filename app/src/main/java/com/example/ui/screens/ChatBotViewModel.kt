@@ -26,6 +26,10 @@ import android.net.Uri
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import android.os.Environment
+import android.provider.MediaStore
+import android.content.ContentValues
+import java.io.File
 
 data class AudioFileInfo(
     val fileName: String,
@@ -209,6 +213,8 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
             handleDownloadHistory()
         } else if (text.trim() == ".folder_music") {
             handleOpenFolder()
+        } else if (text.trim() == ".storage") {
+            handleStorageCommand()
         } else {
             handleAICommand(text)
         }
@@ -236,24 +242,97 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
             delay(500)
             
             val fileName = "audio_${System.currentTimeMillis()}.mp3"
-            val fileSizeBytes = (3..12).random() * 1024 * 1024 + (0..1024*1024).random()
-            val fileSize = String.format(Locale.US, "%.1f MB", fileSizeBytes / (1024f * 1024f))
-            val durationSeconds = (120..300).random()
-            val duration = String.format(Locale.US, "%02d:%02d", durationSeconds / 60, durationSeconds % 60)
+            val relativeDir = Environment.DIRECTORY_DOWNLOADS + "/NoxKaav/Music"
+            val absoluteDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath + "/NoxKaav/Music"
             
-            downloadHistory.add(AudioFileInfo(fileName, fileSize, duration))
-            
-            val responseText = """
-                ✅ Download Berhasil
+            var size = 0L
+            var isSuccess = false
+            var errorReason = "Gagal membuat file di penyimpanan."
 
-                Nama File:
-                $fileName
+            try {
+                val resolver = getApplication<android.app.Application>().contentResolver
+                
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                        put(MediaStore.MediaColumns.MIME_TYPE, "audio/mpeg")
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, relativeDir)
+                    }
 
-                Lokasi:
-                Download/NoxKaav/Music/
-            """.trimIndent()
-            
-            replaceFlickerWithMessage(loaderId, responseText)
+                    val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    if (uri != null) {
+                        resolver.openOutputStream(uri)?.use { outputStream ->
+                            val dummyData = ByteArray(1024 * 25) // 25 KB dummy mp3
+                            outputStream.write(dummyData)
+                        }
+
+                        resolver.query(uri, null, null, null, null)?.use { cursor ->
+                            val sizeIndex = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                            if (sizeIndex != -1 && cursor.moveToFirst()) {
+                                size = cursor.getLong(sizeIndex)
+                            }
+                        }
+
+                        if (size > 0) {
+                            isSuccess = true
+                        } else {
+                            errorReason = "File berhasil dibuat namun ukuran 0 KB."
+                            resolver.delete(uri, null, null)
+                        }
+                    }
+                } else {
+                    val extDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val targetDir = File(extDir, "NoxKaav/Music")
+                    if (!targetDir.exists()) {
+                        targetDir.mkdirs()
+                    }
+                    val newFile = File(targetDir, fileName)
+                    newFile.outputStream().use { outputStream ->
+                        val dummyData = ByteArray(1024 * 25)
+                        outputStream.write(dummyData)
+                    }
+                    
+                    size = newFile.length()
+                    if (size > 0) {
+                        isSuccess = true
+                    } else {
+                        errorReason = "Ukuran file 0 KB."
+                        newFile.delete()
+                    }
+                }
+            } catch (e: Exception) {
+                isSuccess = false
+                errorReason = "Exception: ${e.message}"
+            }
+
+            if (isSuccess) {
+                val fileSizeStr = String.format(Locale.US, "%.1f KB", size / 1024f)
+                val durationSeconds = (120..300).random()
+                val duration = String.format(Locale.US, "%02d:%02d", durationSeconds / 60, durationSeconds % 60)
+                
+                downloadHistory.add(AudioFileInfo(fileName, fileSizeStr, duration))
+                
+                val responseText = """
+                    ✅ Download Berhasil
+
+                    Nama File:
+                    $fileName
+
+                    Lokasi:
+                    $absoluteDir/
+                """.trimIndent()
+                
+                replaceFlickerWithMessage(loaderId, responseText)
+            } else {
+                val errorResponse = """
+                    ❌ Gagal menyimpan file
+                    
+                    Alasan:
+                    $errorReason
+                """.trimIndent()
+                
+                replaceFlickerWithMessage(loaderId, errorResponse)
+            }
         }
     }
 
@@ -273,17 +352,47 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
     private fun handleOpenFolder() {
         viewModelScope.launch {
             try {
+                val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val folderPath = File(baseDir, "NoxKaav/Music")
+                val pathString = folderPath.absolutePath
+
                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
-                val uri = android.net.Uri.parse(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).toString() + "/NoxKaav/Music/")
+                val uri = android.net.Uri.parse(pathString)
                 intent.setDataAndType(uri, "*/*")
                 intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 getApplication<android.app.Application>().startActivity(intent)
                 
-                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Membuka folder Download/NoxKaav/Music/...", isUser = false)
+                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Membuka folder $pathString/...", isUser = false)
             } catch (e: Exception) {
-                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Gagal membuka folder atau folder belum tersedia.", isUser = false)
+                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Gagal membuka folder: ${e.message}", isUser = false)
             }
         }
+    }
+
+    private fun handleStorageCommand() {
+        val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val folderPath = File(baseDir, "NoxKaav/Music")
+        val pathString = folderPath.absolutePath
+
+        val folderExists = folderPath.exists() && folderPath.isDirectory
+        var fileCount = 0
+
+        if (folderExists) {
+            fileCount = folderPath.listFiles()?.size ?: 0
+        }
+
+        val responseText = """
+            📂 Lokasi Penyimpanan
+            $pathString/
+            
+            Status Folder:
+            ${if (folderExists) "Ada" else "Tidak Ada"}
+            
+            Jumlah File:
+            $fileCount
+        """.trimIndent()
+
+        _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = responseText, isUser = false)
     }
 
     private fun handleRatingCommand() {

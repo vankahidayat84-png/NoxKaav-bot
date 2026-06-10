@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -68,6 +69,27 @@ fun ChatBotScreen(
     val chatBackgroundUri by com.example.UserPreferencesManager.chatBackgroundUri.collectAsState()
     val customLogoUri by com.example.UserPreferencesManager.customLogoUri.collectAsState()
 
+    val currentContext = androidx.compose.ui.platform.LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain"),
+        onResult = { uri ->
+            if (uri != null) {
+                try {
+                    val exportText = messages.joinToString("\n\n") { msg ->
+                        val sender = if (msg.isUser) "User" else "NoxKaav"
+                        "$sender:\n${msg.text}"
+                    }
+                    currentContext.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                        outputStream.write(exportText.toByteArray())
+                    }
+                    android.widget.Toast.makeText(currentContext, "Chat exported successfully", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(currentContext, "Failed to export chat", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    )
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -96,6 +118,17 @@ fun ChatBotScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { 
+                        exportLauncher.launch("NoxKaav_Chat_History.txt")
+                    }) {
+                        Text("💾", fontSize = 20.sp)
+                    }
+                    IconButton(onClick = { 
+                        viewModel.clearMessages()
+                        inputText = ""
+                    }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Clear Chat", tint = WhiteText)
+                    }
                     if (profileImageUri != null) {
                         coil.compose.AsyncImage(
                             model = profileImageUri,
