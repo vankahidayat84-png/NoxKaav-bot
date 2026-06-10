@@ -58,7 +58,7 @@ fun DashboardScreen(navController: NavController) {
             contentAlignment = Alignment.Center
         ) {
             Image(
-                painter = painterResource(id = R.drawable.ic_bird_logo_1781089868145),
+                painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
                 contentDescription = "Logo NoxKaav",
                 modifier = Modifier.size(80.dp)
             )
@@ -180,14 +180,14 @@ fun DashboardScreen(navController: NavController) {
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "SYSTEM STATUS",
+                        text = "Premium Access Active",
                         color = WhiteText.copy(alpha = 0.7f),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 2.sp
                     )
                     Text(
-                        text = "NoxKaav is Online",
+                        text = "🦅 NOXKAAV ONLINE",
                         color = WhiteText,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold

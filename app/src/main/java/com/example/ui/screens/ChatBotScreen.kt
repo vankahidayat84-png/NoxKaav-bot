@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -19,11 +21,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Person
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.R
@@ -55,6 +60,9 @@ fun ChatBotScreen(
         }
     )
 
+    val profileImageUri by com.example.UserPreferencesManager.profileImageUri.collectAsState()
+    val chatBackgroundUri by com.example.UserPreferencesManager.chatBackgroundUri.collectAsState()
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -67,7 +75,7 @@ fun ChatBotScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_bird_logo_1781089868145),
+                            painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
                             contentDescription = "Logo",
                             modifier = Modifier.size(32.dp),
                             contentScale = ContentScale.Fit
@@ -75,13 +83,38 @@ fun ChatBotScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text("NOXKAAV BOT", color = WhiteText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("Online", color = MaroonPrimary, fontSize = 12.sp)
+                            Text("🟢 Online", color = Color(0xFF00FF00), fontSize = 12.sp)
                         }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = WhiteText)
+                    }
+                },
+                actions = {
+                    if (profileImageUri != null) {
+                        coil.compose.AsyncImage(
+                            model = profileImageUri,
+                            contentDescription = "User Profile",
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(32.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Filled.Person,
+                            contentDescription = "Default User Profile",
+                            tint = WhiteText,
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(32.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(com.example.ui.theme.LighterGray)
+                                .padding(4.dp)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -138,25 +171,45 @@ fun ChatBotScreen(
             }
         }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
-        ) {
-            items(messages) { message ->
-                ChatBubble(message)
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (chatBackgroundUri != null) {
+                coil.compose.AsyncImage(
+                    model = chatBackgroundUri,
+                    contentDescription = "Chat Background",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp),
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                items(messages) { message ->
+                    ChatBubble(
+                        message = message,
+                        profileImageUri = profileImageUri,
+                        onReactionSelected = { emoji ->
+                            viewModel.toggleReaction(message.id, emoji)
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
-    val alignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
+fun ChatBubble(
+    message: ChatMessage,
+    profileImageUri: String?,
+    onReactionSelected: (String) -> Unit
+) {
+    val alignment = if (message.isUser) Arrangement.End else Arrangement.Start
     val bgColor = if (message.isUser) MaroonPrimary else LighterGray
     val shape = if (message.isUser) {
         RoundedCornerShape(16.dp, 16.dp, 0.dp, 16.dp)
@@ -164,22 +217,119 @@ fun ChatBubble(message: ChatMessage) {
         RoundedCornerShape(16.dp, 16.dp, 16.dp, 0.dp)
     }
 
-    Box(
+    var showReactionMenu by remember { mutableStateOf(false) }
+
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        contentAlignment = alignment
+        horizontalArrangement = alignment,
+        verticalAlignment = Alignment.Bottom
     ) {
-        Box(
-            modifier = Modifier
-                .clip(shape)
-                .background(bgColor)
-                .padding(12.dp)
-                .widthIn(max = 280.dp)
-        ) {
-            Text(
-                text = message.text,
-                color = WhiteText,
-                fontSize = 14.sp
+        if (!message.isUser) {
+            Image(
+                painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
+                contentDescription = "Bot Avatar",
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Color.Black)
             )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+
+        Column(horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start) {
+            Box(
+                modifier = Modifier
+                    .clip(shape)
+                    .background(bgColor)
+                    .pointerInput(message.isFlickerLoader) {
+                        detectTapGestures(
+                            onLongPress = { 
+                                if (!message.isFlickerLoader && !message.isUser) showReactionMenu = true 
+                            }
+                        )
+                    }
+                    .padding(12.dp)
+                    .widthIn(max = 240.dp)
+            ) {
+                Text(
+                    text = message.text,
+                    color = WhiteText,
+                    fontSize = 14.sp
+                )
+            }
+
+            if (message.reaction != null) {
+                Box(
+                    modifier = Modifier
+                        .offset(y = (-8).dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(com.example.ui.theme.DarkerGrayIconBg)
+                        .padding(4.dp)
+                ) {
+                    Text(text = message.reaction, fontSize = 14.sp)
+                }
+            }
+            
+            if (showReactionMenu) {
+                DropdownMenu(
+                    expanded = showReactionMenu,
+                    onDismissRequest = { showReactionMenu = false },
+                    modifier = Modifier.background(com.example.ui.theme.DarkerGrayIconBg)
+                ) {
+                    val emojis = listOf("👍", "❤️", "😂", "😮", "😢", "😡")
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        emojis.forEach { emoji ->
+                            Text(
+                                text = emoji,
+                                fontSize = 24.sp,
+                                modifier = Modifier.clickable {
+                                    onReactionSelected(emoji)
+                                    showReactionMenu = false
+                                }
+                            )
+                        }
+                    }
+                    val currentContext = androidx.compose.ui.platform.LocalContext.current
+                    DropdownMenuItem(
+                        text = { Text("Salin Teks", color = WhiteText) },
+                        onClick = {
+                            val clipboard = currentContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Pesan NoxKaav", message.text)
+                            clipboard.setPrimaryClip(clip)
+                            android.widget.Toast.makeText(currentContext, "Teks berhasil disalin", android.widget.Toast.LENGTH_SHORT).show()
+                            showReactionMenu = false
+                        }
+                    )
+                }
+            }
+        }
+
+        if (message.isUser) {
+            Spacer(modifier = Modifier.width(8.dp))
+            if (profileImageUri != null) {
+                coil.compose.AsyncImage(
+                    model = profileImageUri,
+                    contentDescription = "User Avatar",
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Person,
+                    contentDescription = "User Avatar",
+                    tint = WhiteText,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(LighterGray)
+                        .padding(4.dp)
+                )
+            }
         }
     }
 }

@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/ic_bird_logo_1781089868145"
+        android:drawable="@drawable/noxkaav_head_logo_1781092408814"
         android:gravity="center" />
 </layer-list>

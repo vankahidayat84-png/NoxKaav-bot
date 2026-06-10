@@ -87,7 +87,7 @@ fun SplashScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Image(
-            painter = painterResource(id = R.drawable.ic_bird_logo_1781089868145),
+            painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
             contentDescription = "Logo NoxKaav",
             modifier = Modifier
                 .size(160.dp)

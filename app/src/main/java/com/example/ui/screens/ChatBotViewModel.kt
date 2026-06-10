@@ -32,7 +32,8 @@ data class ChatMessage(
     val text: String,
     val isUser: Boolean,
     val isFlickerLoader: Boolean = false,
-    val isSystem: Boolean = false
+    val isSystem: Boolean = false,
+    val reaction: String? = null
 )
 
 // Gemini Data Classes
@@ -111,6 +112,75 @@ class ChatBotViewModel : ViewModel() {
         "💭 Sedang berpikir...",
         "🚀 Menyiapkan hasil..."
     )
+
+    init {
+        sendWelcomeMessage()
+    }
+
+    private fun sendWelcomeMessage() {
+        viewModelScope.launch {
+            val loaderId = UUID.randomUUID().toString()
+            _messages.value = listOf(ChatMessage(id = loaderId, text = "🦅 Menyiapkan Ruang Obrolan...", isUser = false, isFlickerLoader = true))
+            
+            delay(500)
+            updateFlickerMessage(loaderId, "📂 Membuka Arsip Sistem...")
+            delay(500)
+            updateFlickerMessage(loaderId, "⚙ Menyiapkan Antarmuka...")
+            delay(500)
+            updateFlickerMessage(loaderId, "✨ Selamat Datang...")
+            delay(500)
+
+            val welcomeText = """
+                ╭──────────────────────╮
+                        NOXKAAV
+                ╰──────────────────────╯
+
+                🦅 Selamat datang di NoxKaav.
+
+                Saya adalah asisten virtual buatan Maskaav.
+
+                Untuk memulai penggunaan:
+
+                • Ketik .menu untuk melihat menu utama
+                • Ketik .allmenu untuk melihat semua fitur
+                • Ketik .setting untuk pengaturan
+                • Ketik .about untuk informasi aplikasi
+
+                ═══════════════════════
+
+                💡 Tips Penggunaan
+
+                Gunakan tanda titik (.) sebelum command.
+
+                Contoh:
+
+                .menu
+                .allmenu
+                .about
+
+                ═══════════════════════
+
+                🦅 "Darkness Watches."
+
+                Powered By Maskaav
+            """.trimIndent()
+            
+            replaceFlickerWithMessage(loaderId, welcomeText)
+        }
+    }
+
+    fun clearMessages() {
+        _messages.value = emptyList()
+        sendWelcomeMessage()
+    }
+
+    fun toggleReaction(messageId: String, emoji: String) {
+        _messages.value = _messages.value.map { msg ->
+            if (msg.id == messageId) {
+                if (msg.reaction == emoji) msg.copy(reaction = null) else msg.copy(reaction = emoji)
+            } else msg
+        }
+    }
 
     fun sendMessage(text: String, imageUri: Uri? = null, isCommandRef: String = "") {
         val userMsg = ChatMessage(text = text, isUser = true)

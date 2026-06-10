@@ -49,7 +49,7 @@ fun AboutScreen(navController: NavController) {
         ) {
             Spacer(modifier = Modifier.height(32.dp))
             Image(
-                painter = painterResource(id = R.drawable.ic_bird_logo_1781089868145),
+                painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
                 contentDescription = "Logo NoxKaav",
                 modifier = Modifier.size(100.dp)
             )
