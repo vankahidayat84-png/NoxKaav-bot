@@ -27,13 +27,21 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+data class AudioFileInfo(
+    val fileName: String,
+    val fileSize: String,
+    val duration: String
+)
+
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
     val isFlickerLoader: Boolean = false,
     val isSystem: Boolean = false,
-    val reaction: String? = null
+    val reaction: String? = null,
+    val downloadProgress: Float? = null,
+    val audioFiles: List<AudioFileInfo>? = null
 )
 
 // Gemini Data Classes
@@ -113,7 +121,7 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
         "🚀 Menyiapkan hasil..."
     )
 
-    private val downloadHistory = mutableListOf<String>()
+    private val downloadHistory = mutableListOf<AudioFileInfo>()
 
     init {
         sendWelcomeMessage()
@@ -215,16 +223,25 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
         
         viewModelScope.launch {
             val loaderId = UUID.randomUUID().toString()
-            _messages.value = _messages.value + ChatMessage(id = loaderId, text = "🦅 Memvalidasi URL...", isUser = false, isFlickerLoader = true)
+            _messages.value = _messages.value + ChatMessage(id = loaderId, text = "🦅 Memvalidasi URL...", isUser = false, isFlickerLoader = true, downloadProgress = 0f)
             
             delay(800)
-            updateFlickerMessage(loaderId, "📥 Mengunduh file audio...")
-            delay(1200)
-            updateFlickerMessage(loaderId, "⚙ Memproses file...")
-            delay(800)
+            
+            // Simulate download progress
+            for (progress in 10..100 step 10) {
+                val statusText = if (progress < 100) "📥 Mengunduh file audio..." else "⚙ Memproses file..."
+                updateFlickerMessage(loaderId, statusText, progress / 100f)
+                delay(300)
+            }
+            delay(500)
             
             val fileName = "audio_${System.currentTimeMillis()}.mp3"
-            downloadHistory.add(fileName)
+            val fileSizeBytes = (3..12).random() * 1024 * 1024 + (0..1024*1024).random()
+            val fileSize = String.format(Locale.US, "%.1f MB", fileSizeBytes / (1024f * 1024f))
+            val durationSeconds = (120..300).random()
+            val duration = String.format(Locale.US, "%02d:%02d", durationSeconds / 60, durationSeconds % 60)
+            
+            downloadHistory.add(AudioFileInfo(fileName, fileSize, duration))
             
             val responseText = """
                 ✅ Download Berhasil
@@ -241,13 +258,16 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
     }
 
     private fun handleDownloadHistory() {
-        val historyText = if (downloadHistory.isEmpty()) {
-            "📂 Riwayat Download kosong."
+        if (downloadHistory.isEmpty()) {
+            _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "📂 Riwayat Download kosong.", isUser = false)
         } else {
-            val list = downloadHistory.mapIndexed { index, name -> "${index + 1}. $name" }.joinToString("\n")
-            "📂 Riwayat Download\n\n$list"
+            _messages.value = _messages.value + ChatMessage(
+                id = UUID.randomUUID().toString(), 
+                text = "📂 Riwayat Download", 
+                isUser = false,
+                audioFiles = downloadHistory.toList()
+            )
         }
-        _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = historyText, isUser = false)
     }
 
     private fun handleOpenFolder() {
@@ -345,15 +365,15 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
         }
     }
 
-    private fun updateFlickerMessage(id: String, newText: String) {
+    private fun updateFlickerMessage(id: String, newText: String, progress: Float? = null) {
         _messages.value = _messages.value.map {
-            if (it.id == id) it.copy(text = newText) else it
+            if (it.id == id) it.copy(text = newText, downloadProgress = progress) else it
         }
     }
 
     private fun replaceFlickerWithMessage(id: String, finalResult: String) {
         _messages.value = _messages.value.map {
-            if (it.id == id) it.copy(text = finalResult, isFlickerLoader = false) else it
+            if (it.id == id) it.copy(text = finalResult, isFlickerLoader = false, downloadProgress = null) else it
         }
     }
 

@@ -17,6 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -279,11 +282,46 @@ fun ChatBubble(
                     .padding(12.dp)
                     .widthIn(max = 240.dp)
             ) {
-                Text(
-                    text = message.text,
-                    color = WhiteText,
-                    fontSize = 14.sp
-                )
+                Column {
+                    Text(
+                        text = message.text,
+                        color = WhiteText,
+                        fontSize = 14.sp
+                    )
+                    
+                    if (message.downloadProgress != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val animatedProgress by androidx.compose.animation.core.animateFloatAsState(
+                                targetValue = message.downloadProgress,
+                                animationSpec = androidx.compose.animation.core.tween(durationMillis = 300)
+                            )
+                            LinearProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(4.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)),
+                                color = com.example.ui.theme.MaroonPrimary,
+                                trackColor = com.example.ui.theme.DarkerGrayIconBg
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${(animatedProgress * 100).toInt()}%",
+                                color = WhiteText,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+
+                    if (message.audioFiles != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        message.audioFiles.forEach { audioInfo ->
+                            AudioPlayerItem(audioInfo = audioInfo)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
             }
 
             if (message.reaction != null) {
@@ -356,6 +394,89 @@ fun ChatBubble(
                         .clip(androidx.compose.foundation.shape.CircleShape)
                         .background(LighterGray)
                         .padding(4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AudioPlayerItem(audioInfo: AudioFileInfo) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isPlaying by remember { mutableStateOf(false) }
+    val mediaPlayer = remember { android.media.MediaPlayer() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (isPlaying) {
+                mediaPlayer.stop()
+            }
+            mediaPlayer.release()
+        }
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(com.example.ui.theme.DarkerGrayIconBg)
+            .padding(8.dp)
+    ) {
+        IconButton(
+            onClick = {
+                if (isPlaying) {
+                    mediaPlayer.stop()
+                    mediaPlayer.reset()
+                    isPlaying = false
+                } else {
+                    try {
+                        val uri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                        mediaPlayer.setDataSource(context, uri)
+                        mediaPlayer.prepare()
+                        mediaPlayer.start()
+                        isPlaying = true
+                        mediaPlayer.setOnCompletionListener {
+                            isPlaying = false
+                        }
+                    } catch (e: Exception) {
+                        isPlaying = false
+                        android.widget.Toast.makeText(context, "Gagal memutar audio", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            modifier = Modifier.size(32.dp).background(LighterGray, shape = androidx.compose.foundation.shape.CircleShape)
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Filled.Close else Icons.Filled.PlayArrow,
+                contentDescription = if (isPlaying) "Stop" else "Play",
+                tint = WhiteText,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = audioInfo.fileName,
+                color = WhiteText,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = audioInfo.fileSize,
+                    color = WhiteText.copy(alpha = 0.7f),
+                    fontSize = 10.sp
+                )
+                Text(
+                    text = audioInfo.duration,
+                    color = WhiteText.copy(alpha = 0.7f),
+                    fontSize = 10.sp
                 )
             }
         }
