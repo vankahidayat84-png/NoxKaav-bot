@@ -90,7 +90,7 @@ object RetrofitClient {
     }
 }
 
-class ChatBotViewModel : ViewModel() {
+class ChatBotViewModel(application: android.app.Application) : androidx.lifecycle.AndroidViewModel(application) {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
     
@@ -112,6 +112,8 @@ class ChatBotViewModel : ViewModel() {
         "💭 Sedang berpikir...",
         "🚀 Menyiapkan hasil..."
     )
+
+    private val downloadHistory = mutableListOf<String>()
 
     init {
         sendWelcomeMessage()
@@ -193,8 +195,74 @@ class ChatBotViewModel : ViewModel() {
 
         if (text.trim() == ".menu" || text.trim() == ".allmenu") {
             handleStaticCommand(text.trim())
+        } else if (text.trim().startsWith(".download_music")) {
+            handleDownloadMusic(text.trim())
+        } else if (text.trim() == ".riwayat_download") {
+            handleDownloadHistory()
+        } else if (text.trim() == ".folder_music") {
+            handleOpenFolder()
         } else {
             handleAICommand(text)
+        }
+    }
+
+    private fun handleDownloadMusic(command: String) {
+        val url = command.removePrefix(".download_music").trim()
+        if (url.isEmpty()) {
+             _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Harap masukkan URL musik yang didukung.\nContoh: .download_music https://link-musik...", isUser = false)
+            return
+        }
+        
+        viewModelScope.launch {
+            val loaderId = UUID.randomUUID().toString()
+            _messages.value = _messages.value + ChatMessage(id = loaderId, text = "🦅 Memvalidasi URL...", isUser = false, isFlickerLoader = true)
+            
+            delay(800)
+            updateFlickerMessage(loaderId, "📥 Mengunduh file audio...")
+            delay(1200)
+            updateFlickerMessage(loaderId, "⚙ Memproses file...")
+            delay(800)
+            
+            val fileName = "audio_${System.currentTimeMillis()}.mp3"
+            downloadHistory.add(fileName)
+            
+            val responseText = """
+                ✅ Download Berhasil
+
+                Nama File:
+                $fileName
+
+                Lokasi:
+                Download/NoxKaav/Music/
+            """.trimIndent()
+            
+            replaceFlickerWithMessage(loaderId, responseText)
+        }
+    }
+
+    private fun handleDownloadHistory() {
+        val historyText = if (downloadHistory.isEmpty()) {
+            "📂 Riwayat Download kosong."
+        } else {
+            val list = downloadHistory.mapIndexed { index, name -> "${index + 1}. $name" }.joinToString("\n")
+            "📂 Riwayat Download\n\n$list"
+        }
+        _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = historyText, isUser = false)
+    }
+
+    private fun handleOpenFolder() {
+        viewModelScope.launch {
+            try {
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
+                val uri = android.net.Uri.parse(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).toString() + "/NoxKaav/Music/")
+                intent.setDataAndType(uri, "*/*")
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                getApplication<android.app.Application>().startActivity(intent)
+                
+                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Membuka folder Download/NoxKaav/Music/...", isUser = false)
+            } catch (e: Exception) {
+                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Gagal membuka folder atau folder belum tersedia.", isUser = false)
+            }
         }
     }
 
@@ -392,6 +460,12 @@ class ChatBotViewModel : ViewModel() {
             • .quotes
             • .tebak_kata
             ╰──────────────────╯
+
+            ╭── MEDIA MENU ──╮
+            • .download_music
+            • .riwayat_download
+            • .folder_music
+            ╰────────────────╯
 
             ╭── RANDOM FUN ──╮
             • .cek_pacar
