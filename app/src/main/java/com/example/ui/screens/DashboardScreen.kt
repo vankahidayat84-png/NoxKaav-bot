@@ -18,6 +18,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +43,8 @@ import com.example.ui.theme.WhiteText
 
 @Composable
 fun DashboardScreen(navController: NavController) {
+    val customLogoUri by com.example.UserPreferencesManager.customLogoUri.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -57,10 +61,9 @@ fun DashboardScreen(navController: NavController) {
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
-                contentDescription = "Logo NoxKaav",
-                modifier = Modifier.size(80.dp)
+            com.example.ui.components.NoxKaavLogo(
+                logoUri = customLogoUri,
+                size = 80.dp
             )
         }
         

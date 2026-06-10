@@ -8,6 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.clickable
@@ -62,6 +63,7 @@ fun ChatBotScreen(
 
     val profileImageUri by com.example.UserPreferencesManager.profileImageUri.collectAsState()
     val chatBackgroundUri by com.example.UserPreferencesManager.chatBackgroundUri.collectAsState()
+    val customLogoUri by com.example.UserPreferencesManager.customLogoUri.collectAsState()
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -74,11 +76,9 @@ fun ChatBotScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
-                            contentDescription = "Logo",
-                            modifier = Modifier.size(32.dp),
-                            contentScale = ContentScale.Fit
+                        com.example.ui.components.NoxKaavLogo(
+                            logoUri = customLogoUri,
+                            size = 32.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
@@ -124,14 +124,43 @@ fun ChatBotScreen(
         },
         containerColor = DarkGrayBackground,
         bottomBar = {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(WindowInsets.navigationBars.asPaddingValues())
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val quickCommands = listOf(".menu", ".allmenu", ".about")
+                    items(quickCommands) { cmd ->
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = LighterGray,
+                            modifier = Modifier.clickable {
+                                viewModel.sendMessage(cmd)
+                            }
+                        ) {
+                            Text(
+                                text = cmd,
+                                color = WhiteText,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
                     placeholder = { Text("Ketik perintah atau pesan...", color = WhiteText.copy(alpha = 0.5f)) },
@@ -168,8 +197,9 @@ fun ChatBotScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
                 }
-            }
-        }
+                } // close Row
+            } // close Column
+        } // close bottomBar
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize()) {
             if (chatBackgroundUri != null) {
@@ -193,6 +223,7 @@ fun ChatBotScreen(
                     ChatBubble(
                         message = message,
                         profileImageUri = profileImageUri,
+                        botLogoUri = customLogoUri,
                         onReactionSelected = { emoji ->
                             viewModel.toggleReaction(message.id, emoji)
                         }
@@ -207,6 +238,7 @@ fun ChatBotScreen(
 fun ChatBubble(
     message: ChatMessage,
     profileImageUri: String?,
+    botLogoUri: String?,
     onReactionSelected: (String) -> Unit
 ) {
     val alignment = if (message.isUser) Arrangement.End else Arrangement.Start
@@ -225,13 +257,9 @@ fun ChatBubble(
         verticalAlignment = Alignment.Bottom
     ) {
         if (!message.isUser) {
-            Image(
-                painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
-                contentDescription = "Bot Avatar",
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(Color.Black)
+            com.example.ui.components.NoxKaavLogo(
+                logoUri = botLogoUri,
+                size = 28.dp
             )
             Spacer(modifier = Modifier.width(8.dp))
         }

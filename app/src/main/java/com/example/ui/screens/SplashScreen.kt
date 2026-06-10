@@ -86,12 +86,11 @@ fun SplashScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
-            contentDescription = "Logo NoxKaav",
-            modifier = Modifier
-                .size(160.dp)
-                .scale(finalScale)
+        val customLogoUri by com.example.UserPreferencesManager.customLogoUri.collectAsState()
+        com.example.ui.components.NoxKaavLogo(
+            logoUri = customLogoUri,
+            size = 160.dp,
+            modifier = Modifier.scale(finalScale)
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(

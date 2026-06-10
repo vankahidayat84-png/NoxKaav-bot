@@ -19,6 +19,9 @@ object UserPreferencesManager {
     private val _chatBackgroundUri = MutableStateFlow<String?>(null)
     val chatBackgroundUri: StateFlow<String?> = _chatBackgroundUri.asStateFlow()
 
+    private val _customLogoUri = MutableStateFlow<String?>(null)
+    val customLogoUri: StateFlow<String?> = _customLogoUri.asStateFlow()
+
     private val _language = MutableStateFlow("id")
     val language: StateFlow<String> = _language.asStateFlow()
 
@@ -30,6 +33,7 @@ object UserPreferencesManager {
         _userName.value = prefs.getString("user_name", "User") ?: "User"
         _profileImageUri.value = prefs.getString("profile_image_uri", null)
         _chatBackgroundUri.value = prefs.getString("chat_background_uri", null)
+        _customLogoUri.value = prefs.getString("custom_logo_uri", null)
         _language.value = prefs.getString("language", "id") ?: "id"
         _brightness.value = prefs.getFloat("brightness", 1.0f)
     }
@@ -49,6 +53,11 @@ object UserPreferencesManager {
         prefs.edit().putString("chat_background_uri", uri).apply()
     }
 
+    fun setCustomLogoUri(uri: String?) {
+        _customLogoUri.value = uri
+        prefs.edit().putString("custom_logo_uri", uri).apply()
+    }
+
     fun setLanguage(lang: String) {
         _language.value = lang
         prefs.edit().putString("language", lang).apply()
@@ -64,6 +73,7 @@ object UserPreferencesManager {
         _userName.value = "User"
         _profileImageUri.value = null
         _chatBackgroundUri.value = null
+        _customLogoUri.value = null
         _language.value = "id"
         _brightness.value = 1.0f
     }

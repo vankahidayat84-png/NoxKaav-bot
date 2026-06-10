@@ -45,6 +45,7 @@ fun SettingScreen(
     val activity = LocalContext.current as? Activity
     val profileImageUri by UserPreferencesManager.profileImageUri.collectAsState()
     val chatBackgroundUri by UserPreferencesManager.chatBackgroundUri.collectAsState()
+    val customLogoUri by UserPreferencesManager.customLogoUri.collectAsState()
     val userName by UserPreferencesManager.userName.collectAsState()
     val brightness by UserPreferencesManager.brightness.collectAsState()
 
@@ -64,6 +65,13 @@ fun SettingScreen(
         if (uri != null) {
             context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             UserPreferencesManager.setChatBackgroundUri(uri.toString())
+        }
+    }
+
+    val logoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            UserPreferencesManager.setCustomLogoUri(uri.toString())
         }
     }
 
@@ -129,6 +137,16 @@ fun SettingScreen(
 
             Text("PENGATURAN UMUM", color = MaroonPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             
+            SettingItem("🦅 Logo NoxKaav") {
+                logoLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
+            if (customLogoUri != null) {
+                SettingItem("Hapus Logo NoxKaav") {
+                    UserPreferencesManager.setCustomLogoUri(null)
+                    Toast.makeText(context, "Logo di-reset", Toast.LENGTH_SHORT).show()
+                }
+            }
+
             SettingItem("Custom Background Chat") {
                 backgroundLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }

@@ -7,6 +7,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -24,6 +26,8 @@ import com.example.ui.theme.WhiteText
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(navController: NavController) {
+    val customLogoUri by com.example.UserPreferencesManager.customLogoUri.collectAsState()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -48,10 +52,9 @@ fun AboutScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(32.dp))
-            Image(
-                painter = painterResource(id = R.drawable.noxkaav_head_logo_1781092408814),
-                contentDescription = "Logo NoxKaav",
-                modifier = Modifier.size(100.dp)
+            com.example.ui.components.NoxKaavLogo(
+                logoUri = customLogoUri,
+                size = 100.dp
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
