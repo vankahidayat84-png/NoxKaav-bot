@@ -245,6 +245,7 @@ class ChatBotViewModel(application: android.app.Application) : androidx.lifecycl
         }
     }
 
+
     private fun handleDownloadHistory() {
         val report = if (downloadHistory.isEmpty()) {
             "📂 Riwayat Download kosong."
@@ -260,7 +261,6 @@ messages.value = _messages.value + ChatMessage(text = "Fitur menu sedang disiapk
     private fun replaceFlickerWithMessage(id: String, finalResult: String) {
         _messages.value = _messages.value.map {
             if (it.id == id) it.copy(text = finalResult, isFlickerLo
-
     private fun getMenuText(): String {
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
