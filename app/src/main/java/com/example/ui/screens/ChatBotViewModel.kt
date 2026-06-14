@@ -4,7 +4,7 @@ import android.content.ContentValues
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -16,17 +16,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.ResponseBody
 import retrofit2.Retrofit
 import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.Query
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
-import java.util.*
-import java.util.concurrent.TimeUnit
+import java.io.File
+import java.io.FileOutputStream
 import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.*
 
 data class AudioFileInfo(
     val fileName: String,
@@ -45,7 +49,6 @@ data class ChatMessage(
     val audioFiles: List<AudioFileInfo>? = null
 )
 
-// Gemini Data Classes
 @Serializable
 data class GenerateContentRequest(
     val contents: List<Content>
@@ -80,30 +83,30 @@ interface GeminiApiService {
 }
 
 object RetrofitClient {
-    private const val BASE_URL = "https://generativelanguage.googleapis.com/"
+    private const val BASE_URL = "https://googleapis.com"
 
     private val okHttpClient = OkHttpClient.Builder()
-       .connectTimeout(60, TimeUnit.SECONDS)
-       .readTimeout(60, TimeUnit.SECONDS)
-       .writeTimeout(60, TimeUnit.SECONDS)
-       .build()
+        .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     val service: GeminiApiService by lazy {
         val json = Json { ignoreUnknownKeys = true }
         val retrofit = Retrofit.Builder()
-           .baseUrl(BASE_URL)
-           .client(okHttpClient)
-           .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-           .build()
+            .baseUrl(BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
         retrofit.create(GeminiApiService::class.java)
     }
 }
 
-class ChatBotViewModel(application: android.app.Application) : AndroidViewModel(application) {
+class ChatBotViewModel(application: android.app.Application) : androidx.lifecycle.AndroidViewModel(application) {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
     private val context = application.applicationContext
-
+    
     private val flickerTexts = listOf(
         "🦅 NoxKaav sedang mengamati...",
         "⚙ Menjalankan perintah...",
@@ -122,17 +125,17 @@ class ChatBotViewModel(application: android.app.Application) : AndroidViewModel(
             val loaderId = UUID.randomUUID().toString()
             _messages.value = listOf(ChatMessage(id = loaderId, text = "🦅 Menyiapkan Ruang Obrolan...", isUser = false, isFlickerLoader = true))
             delay(300)
-
+            
             val welcomeText = """
                 ╭──────────────────────╮
                         NOXKAAV
                 ╰──────────────────────╯
                 🦅 Selamat datang di NoxKaav.
                 Saya adalah asisten virtual buatan Maskaav.
-
-                • Ketik.menu untuk melihat menu utama
-                • Ketik.download_music [link] untuk unduh lagu
-                • Ketik.riwayat_download untuk cek riwayat
+                
+                • Ketik .menu untuk melihat menu utama
+                • Ketik .download_music [link] untuk unduh lagu
+                • Ketik .riwayat_download untuk cek riwayat
             """.trimIndent()
             replaceFlickerWithMessage(loaderId, welcomeText)
         }
@@ -141,6 +144,14 @@ class ChatBotViewModel(application: android.app.Application) : AndroidViewModel(
     fun clearMessages() {
         _messages.value = emptyList()
         sendWelcomeMessage()
+    }
+
+    fun toggleReaction(messageId: String, emoji: String) {
+        _messages.value = _messages.value.map { msg ->
+            if (msg.id == messageId) {
+                if (msg.reaction == emoji) msg.copy(reaction = null) else msg.copy(reaction = emoji)
+            } else msg
+        }
     }
 
     fun sendMessage(text: String, imageUri: Uri? = null, isCommandRef: String = "") {
@@ -159,48 +170,48 @@ class ChatBotViewModel(application: android.app.Application) : AndroidViewModel(
     private fun handleDownloadMusic(command: String) {
         val url = command.removePrefix(".download_music").trim()
         if (url.isEmpty()) {
-            _messages.value = _messages.value + ChatMessage(text = "Harap masukkan URL musik.\nContoh:.download_music https://youtu.be...", isUser = false)
+            _messages.value = _messages.value + ChatMessage(text = "Harap masukkan URL musik.\nContoh: .download_music https://youtu.be...", isUser = false)
             return
         }
-
+        
         viewModelScope.launch {
             val loaderId = UUID.randomUUID().toString()
             _messages.value = _messages.value + ChatMessage(id = loaderId, text = "📥 Menghubungkan ke API Pengunduh...", isUser = false, isFlickerLoader = true, downloadProgress = 0.1f)
-
+            
             val fileName = "NoxKaav_${System.currentTimeMillis()}.mp3"
-
+            
             val success = withContext(Dispatchers.IO) {
                 try {
                     val encodedUrl = URLEncoder.encode(url, "UTF-8")
                     val downloadApiUrl = "https://vexdl.com"
-
+                    
                     val client = OkHttpClient()
                     val request = Request.Builder().url(downloadApiUrl).build()
                     val response = client.newCall(request).execute()
-
-                    if (response.isSuccessful && response.body!= null) {
+                    
+                    if (response.isSuccessful && response.body != null) {
                         val body = response.body!!
                         val totalBytes = body.contentLength()
-
+                        
                         val resolver = context.contentResolver
                         val contentValues = ContentValues().apply {
                             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                             put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
                             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/NoxKaav")
                         }
-
+                        
                         val audioUri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, contentValues)
-                        if (audioUri!= null) {
+                        if (audioUri != null) {
                             resolver.openOutputStream(audioUri).use { outputStream ->
                                 val inputStream = body.byteStream()
                                 val buffer = ByteArray(4096)
                                 var bytesRead: Int
                                 var downloadedBytes = 0L
-
-                                while (inputStream.read(buffer).also { bytesRead = it }!= -1) {
+                                
+                                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                                     outputStream?.write(buffer, 0, bytesRead)
                                     downloadedBytes += bytesRead
-
+                                    
                                     if (totalBytes > 0) {
                                         val progress = downloadedBytes.toFloat() / totalBytes.toFloat()
                                         updateFlickerMessage(loaderId, "📥 Mengunduh data lagu... ${(progress * 100).toInt()}%", progress)
@@ -208,7 +219,7 @@ class ChatBotViewModel(application: android.app.Application) : AndroidViewModel(
                                 }
                                 outputStream?.flush()
                             }
-
+                            
                             if (totalBytes > 0) {
                                 val sizeInMb = String.format(Locale.US, "%.2f MB", totalBytes.toFloat() / (1024 * 1024))
                                 downloadHistory.add(AudioFileInfo(fileName, sizeInMb, "Unknown"))
@@ -225,7 +236,7 @@ class ChatBotViewModel(application: android.app.Application) : AndroidViewModel(
                     false
                 }
             }
-
+            
             if (success) {
                 replaceFlickerWithMessage(loaderId, "✅ Lagu Berhasil Disimpan!\n\n📁 Folder: /Music/NoxKaav/\n🎵 File: $fileName")
             } else {
@@ -242,247 +253,13 @@ class ChatBotViewModel(application: android.app.Application) : AndroidViewModel(
         }
         _messages.value = _messages.value + ChatMessage(text = report, isUser = false)
     }
-
+messages.value = _messages.value + ChatMessage(text = "Fitur menu sedang disiapkan.", isUser = false)}private fun handleAICommand(text: String) {viewModelScope.launch {val loaderId = UUID.randomUUID().toString()_messages.value = _messages.value + ChatMessage(id = loaderId, text = "🧠 Memproses data...", isUser = false, isFlickerLoader = true)delay(500)try {val req = GenerateContentRequest(contents = listOf(Content(parts = listOf(Part(text = text)))))val res = RetrofitClient.service.generateContent(BuildConfig.GEMINI_API_KEY, req)val reply = res.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "Tidak ada respon dari sistem."replaceFlickerWithMessage(loaderId, reply)} catch (e: Exception) {replaceFlickerWithMessage(loaderId, "Terjadi kesalahan jaringan.")}}}private fun updateFlickerMessage(id: String, newText: String, progress: Float? = null) {_messages.value = _messages.value.map { if (it.id == id) it.copy(text = newText, downloadProgress = progress) else it }}private fun replaceFlickerWithMessage(id: String, finalText: String) {_messages.value = _messages.value.map { if (it.id == id) it.copy(text = finalText, isFlickerLoader = false, downloadProgress = null) else it }}private fun handleRatingCommand() {}private fun handleOpenFolder() {}private fun handleStorageCommand() {}}
     private fun handleStaticCommand(cmd: String) {
-        _messages.value = _messages.value + ChatMessage(text = "Fitur menu sedang disiapkan.", isUser = false)
-    }
 
-    private fun handleAICommand(text: String) {
-        viewModelScope.launch {
-            val loaderId = UUID.randomUUID().toString()
-            _messages.value = _messages.value + ChatMessage(id = loaderId, text = "🧠 Memproses data...", isUser = false, isFlickerLoader = true)
-            delay(500)
-            try {
-                val req = GenerateContentRequest(contents = listOf(Content(parts = listOf(Part(text = text)))))
-                val res = RetrofitClient.service.generateContent(BuildConfig.GEMINI_API_KEY, req)
-                val reply = res.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?: "Tidak ada respon dari sistem."
-                replaceFlickerWithMessage(loaderId, reply)
-            } catch (e: Exception) {
-                replaceFlickerWithMessage(loaderId, "Terjadi kesalahan jaringan.")
-            }
-        }
-    }
-
-    private fun updateFlickerMessage(id: String, newText: String, progress: Float? = null) {
-        _messages.value = _messages.value.map {
-            if (it.id == id) it.copy(text = newText, downloadProgress = progress) else it
-        }
-    }
-
-    private fun replaceFlickerWithMessage(id: String, finalText: String) {
-        _messages.value = _messages.value.map {
-            if (it.id == id) it.copy(text = finalText, isFlickerLoader = false, downloadProgress = null) else it
-        }
-    }
-
-    private fun handleRatingCommand() {}
-    private fun handleOpenFolder() {}
-    private fun handleStorageCommand() {}
-}
-cDirectory(Environment.DIRECTORY_DOWNLOADS)
-                    val targetDir = File(extDir, "NoxKaav/Music")
-                    if (!targetDir.exists()) {
-                        targetDir.mkdirs()
-                    }
-                    val newFile = File(targetDir, fileName)
-                    newFile.outputStream().use { outputStream ->
-                        val dummyData = ByteArray(1024 * 25)
-                        outputStream.write(dummyData)
-                    }
-                    
-                    size = newFile.length()
-                    if (size > 0) {
-                        isSuccess = true
-                    } else {
-                        errorReason = "Ukuran file 0 KB."
-                        newFile.delete()
-                    }
-                }
-            } catch (e: Exception) {
-                isSuccess = false
-                errorReason = "Exception: ${e.message}"
-            }
-
-            if (isSuccess) {
-                val fileSizeStr = String.format(Locale.US, "%.1f KB", size / 1024f)
-                val durationSeconds = (120..300).random()
-                val duration = String.format(Locale.US, "%02d:%02d", durationSeconds / 60, durationSeconds % 60)
-                
-                downloadHistory.add(AudioFileInfo(fileName, fileSizeStr, duration))
-                
-                val responseText = """
-                    ✅ Download Berhasil
-
-                    Nama File:
-                    $fileName
-
-                    Lokasi:
-                    $absoluteDir/
-                """.trimIndent()
-                
-                replaceFlickerWithMessage(loaderId, responseText)
-            } else {
-                val errorResponse = """
-                    ❌ Gagal menyimpan file
-                    
-                    Alasan:
-                    $errorReason
-                """.trimIndent()
-                
-                replaceFlickerWithMessage(loaderId, errorResponse)
-            }
-        }
-    }
-
-    private fun handleDownloadHistory() {
-        if (downloadHistory.isEmpty()) {
-            _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "📂 Riwayat Download kosong.", isUser = false)
-        } else {
-            _messages.value = _messages.value + ChatMessage(
-                id = UUID.randomUUID().toString(), 
-                text = "📂 Riwayat Download", 
-                isUser = false,
-                audioFiles = downloadHistory.toList()
-            )
-        }
-    }
-
-    private fun handleOpenFolder() {
-        viewModelScope.launch {
-            try {
-                val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                val folderPath = File(baseDir, "NoxKaav/Music")
-                val pathString = folderPath.absolutePath
-
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
-                val uri = android.net.Uri.parse(pathString)
-                intent.setDataAndType(uri, "*/*")
-                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                getApplication<android.app.Application>().startActivity(intent)
-                
-                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Membuka folder $pathString/...", isUser = false)
-            } catch (e: Exception) {
-                _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = "Gagal membuka folder: ${e.message}", isUser = false)
-            }
-        }
-    }
-
-    private fun handleStorageCommand() {
-        val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val folderPath = File(baseDir, "NoxKaav/Music")
-        val pathString = folderPath.absolutePath
-
-        val folderExists = folderPath.exists() && folderPath.isDirectory
-        var fileCount = 0
-
-        if (folderExists) {
-            fileCount = folderPath.listFiles()?.size ?: 0
-        }
-
-        val responseText = """
-            📂 Lokasi Penyimpanan
-            $pathString/
-            
-            Status Folder:
-            ${if (folderExists) "Ada" else "Tidak Ada"}
-            
-            Jumlah File:
-            $fileCount
-        """.trimIndent()
-
-        _messages.value = _messages.value + ChatMessage(id = UUID.randomUUID().toString(), text = responseText, isUser = false)
-    }
-
-    private fun handleRatingCommand() {
-        viewModelScope.launch {
-            val loaderId = UUID.randomUUID().toString()
-            _messages.value = _messages.value + ChatMessage(id = loaderId, text = flickerTexts.random(), isUser = false, isFlickerLoader = true)
-            
-            // Flicker Animation
-            val steps = 5
-            for (i in 0 until steps) {
-                delay(300)
-                updateFlickerMessage(loaderId, flickerTexts.random())
-            }
-            delay(500)
-            
-            val responseText = """
-                [HASIL RATING]
-                • Kualitas Foto: 8.5/10 - Pencahayaan cukup baik.
-                • Pose: Natural dan santai
-                • Aura: Gelap misterius namun elegan
-                • Kesan Umum: Keren dan percaya diri
-                • Rating Akhir: 9/10
-            """.trimIndent()
-            replaceFlickerWithMessage(loaderId, responseText)
-        }
-    }
-
-    private fun handleStaticCommand(command: String) {
-        viewModelScope.launch {
-            val loaderId = UUID.randomUUID().toString()
-            _messages.value = _messages.value + ChatMessage(id = loaderId, text = flickerTexts.random(), isUser = false, isFlickerLoader = true)
-            
-            // Flicker Animation
-            val steps = 5
-            for (i in 0 until steps) {
-                delay(300)
-                updateFlickerMessage(loaderId, flickerTexts.random())
-            }
-            delay(500)
-            
-            val responseText = if (command == ".menu") getMenuText() else getAllMenuText()
-            replaceFlickerWithMessage(loaderId, responseText)
-        }
-    }
-
-    private fun handleAICommand(prompt: String) {
-        viewModelScope.launch {
-            val loaderId = UUID.randomUUID().toString()
-            _messages.value = _messages.value + ChatMessage(id = loaderId, text = flickerTexts.random(), isUser = false, isFlickerLoader = true)
-            
-            // Start Flicker in parallel loop
-            var isLoading = true
-            val animJob = launch {
-                while(isLoading) {
-                    delay(300)
-                    updateFlickerMessage(loaderId, flickerTexts.random())
-                }
-            }
-
-            // Call API
-            var responseText = "Terjadi kesalahan koneksi atau konfigurasi AI."
-            try {
-                val apiKey = BuildConfig.GEMINI_API_KEY
-                val request = GenerateContentRequest(
-                    contents = listOf(Content(parts = listOf(Part(text = "You are NoxKaav, a mysterious AI Bot developed by Maskaav. Respond to: $prompt"))))
-                )
-                val response = RetrofitClient.service.generateContent(apiKey, request)
-                val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                if (text != null) {
-                    responseText = text
-                }
-            } catch (e: Exception) {
-                responseText = "Error: \${e.message}"
-            }
-            
-            isLoading = false
-            animJob.cancel()
-            replaceFlickerWithMessage(loaderId, responseText)
-        }
-    }
-
-    private fun updateFlickerMessage(id: String, newText: String, progress: Float? = null) {
-        _messages.value = _messages.value.map {
-            if (it.id == id) it.copy(text = newText, downloadProgress = progress) else it
-        }
-    }
 
     private fun replaceFlickerWithMessage(id: String, finalResult: String) {
         _messages.value = _messages.value.map {
-            if (it.id == id) it.copy(text = finalResult, isFlickerLoader = false, downloadProgress = null) else it
-        }
-    }
+            if (it.id == id) it.copy(text = finalResult, isFlickerLo
 
     private fun getMenuText(): String {
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
